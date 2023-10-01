@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"strings"
@@ -32,13 +33,16 @@ func NewRingIntBuffer(size int) *RingIntBuffer {
 // Добавление нового элемента в конец буфера.
 // При попытке добавления нового элемента в заполненный буфер самое старое значение затирается.
 func (r *RingIntBuffer) Push(el int) {
+	pushLog := log.New(os.Stdout, "Step3 (Push): ", log.Ldate|log.Ltime|log.Lshortfile)
 	r.m.Lock()
 	defer r.m.Unlock()
 	if r.pos == r.size {
 		r.pos = 0
 		r.array[r.pos] = el
+		pushLog.Println("Запись в буфер значения: ", el)
 	} else {
 		r.array[r.pos] = el
+		pushLog.Println("Запись в буфер значения: ", el)
 		r.pos++
 
 	}
@@ -46,28 +50,33 @@ func (r *RingIntBuffer) Push(el int) {
 
 // Получение всех элементов буфера и его последующая очистка.
 func (r *RingIntBuffer) Get() []int {
+	getLog := log.New(os.Stdout, "Step3 (Get): ", log.Ldate|log.Ltime|log.Lshortfile)
 	r.m.Lock()
 	defer r.m.Unlock()
 	var output []int = r.array[:r.pos]
 	r.pos = 0
+	getLog.Println("Получение значений из буфера: ", output)
 	return output
 }
 
 // Источник данных. Функция чтения из консоли.
 func reader(toStep1 chan<- int, done chan bool) {
 	scanner := bufio.NewScanner(os.Stdin)
+	checkLog := log.New(os.Stdout, "Check: ", log.Ldate|log.Ltime|log.Lshortfile)
 	var data string
 	fmt.Println("Введите целые положительные или отрицательные числа или 'exit' для выхода из программы")
 	for scanner.Scan() {
 		data = scanner.Text()
 		if strings.EqualFold(data, "exit") {
 			fmt.Println("Программа завершила работу.")
+			checkLog.Println("Получен 'exit'. Выход из программы.")
 			close(done)
 			os.Exit(0)
 		}
 		i, err := strconv.Atoi(data)
 		if err != nil {
 			fmt.Println("Программа обрабатывает только целые числа!")
+			checkLog.Println("Введено не число. Введён символ: ", data)
 			continue
 		}
 		toStep1 <- i
@@ -76,10 +85,12 @@ func reader(toStep1 chan<- int, done chan bool) {
 
 // Стадия фильтрации отрицательных чисел.
 func step1(fromReader <-chan int, toStep2 chan<- int, done <-chan bool) {
+	step1Log := log.New(os.Stdout, "Step1 (Filter): ", log.Ldate|log.Ltime|log.Lshortfile)
 	for {
 		select {
 		case data := <-fromReader:
 			if data > 0 {
+				step1Log.Println("Значение не отрицательное: ", data, " Обрабатываем дальше.")
 				toStep2 <- data
 			}
 		case <-done:
@@ -90,10 +101,12 @@ func step1(fromReader <-chan int, toStep2 chan<- int, done <-chan bool) {
 
 // Стадия фильтрации 0 и чисел не кратных 3.
 func step2(fromStep1 <-chan int, toStep3 chan<- int, done <-chan bool) {
+	step2Log := log.New(os.Stdout, "Step2 (Filter): ", log.Ldate|log.Ltime|log.Lshortfile)
 	for {
 		select {
 		case data := <-fromStep1:
 			if data != 0 && data%3 == 0 {
+				step2Log.Println("Значение не '0' и кратно 3: ", data, " Обрабатываем дальше.")
 				toStep3 <- data
 			}
 		case <-done:
